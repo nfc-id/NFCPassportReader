@@ -39,6 +39,8 @@ public class PassportReader : NSObject {
     private var nfcViewDisplayMessageHandler: ((NFCViewDisplayMessage) -> String?)?
     private var masterListURL : URL?
     private var shouldNotReportNextReaderSessionInvalidationErrorUserCanceled : Bool = false
+    
+    private var activeChallenge : [UInt8]?
 
     // By default, Passive Authentication uses the new RFS5652 method to verify the SOD, but can be switched to use
     // the previous OpenSSL CMS verification if necessary
@@ -52,6 +54,16 @@ public class PassportReader : NSObject {
     
     public func setMasterListURL( _ masterListURL : URL ) {
         self.masterListURL = masterListURL
+    }
+    
+    public func setActiveAuthenticationChallenge(challenge: String) {
+
+        let challengeData = challenge.data(using: .utf8) ?? Data()
+        let challengeArray = [UInt8](challengeData)
+//        let reverseData = Data(challengeArray)
+//        let reverseString = String(data: reverseData, encoding: .utf8)
+        activeChallenge = challengeArray
+        
     }
     
     // This function allows you to override the amount of data the TagReader tries to read from the NFC
@@ -265,7 +277,7 @@ extension PassportReader {
 
         Logger.passportReader.info( "Performing Active Authentication" )
 
-        let challenge = generateRandomUInt8Array(8)
+        let challenge = (activeChallenge == nil) ? generateRandomUInt8Array(8) : activeChallenge!
         Logger.passportReader.debug( "Generated Active Authentication challange - \(binToHexRep(challenge))")
         let response = try await tagReader.doInternalAuthentication(challenge: challenge)
         self.passport.verifyActiveAuthentication( challenge:challenge, signature:response.data )
