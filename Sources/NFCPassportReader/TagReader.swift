@@ -49,12 +49,17 @@ public class TagReader {
         return try await send( cmd: cmd )
     }
     
-    func doInternalAuthentication( challenge: [UInt8] ) async throws -> ResponseAPDU {
+    func doInternalAuthentication( challenge: [UInt8], useExtendedMode: Bool ) async throws -> ResponseAPDU {
         let randNonce = Data(challenge)
         
-        let cmd = NFCISO7816APDU(instructionClass: 00, instructionCode: 0x88, p1Parameter: 0, p2Parameter: 0, data: randNonce, expectedResponseLength: 256)
+        var responseLength = 256
+        if useExtendedMode {
+            responseLength = 65535
+        }
+        
+        let cmd = NFCISO7816APDU(instructionClass: 00, instructionCode: 0x88, p1Parameter: 0, p2Parameter: 0, data: randNonce, expectedResponseLength: responseLength)
 
-        return try await send( cmd: cmd )
+        return try await send( cmd: cmd, useExtendedMode: useExtendedMode )
     }
 
     func doMutualAuthentication( cmdData : Data ) async throws -> ResponseAPDU{
@@ -249,16 +254,27 @@ public class TagReader {
         return try await send( cmd: cmd )
     }
 
-    func send( cmd: NFCISO7816APDU ) async throws -> ResponseAPDU {
+    func send( cmd: NFCISO7816APDU, useExtendedMode : Bool = false ) async throws -> ResponseAPDU {
         Logger.tagReader.debug( "TagReader - sending \(cmd)" )
         var toSend = cmd
         if let sm = secureMessaging {
-            toSend = try sm.protect(apdu:cmd)
+            toSend = try sm.protect(apdu:cmd, useExtendedMode: useExtendedMode)
             Logger.tagReader.debug("TagReader - [SM] \(toSend)" )
         }
         
-        let (data, sw1, sw2) = try await tag.sendCommand(apdu: toSend)
-        Logger.tagReader.debug( "TagReader - Received response" )
+        var (data, sw1, sw2) = try await tag.sendCommand(apdu: toSend)
+        Logger.tagReader.debug( "TagReader - Received response, size \(data.count)b" )
+
+        // Some commands may have bigger response than expected. Read the whole response using INS 0xC0 (GET RESPONSE).
+        while (sw1 == 0x61) {
+            let getResponseCmd = NFCISO7816APDU(instructionClass: 0x0, instructionCode: 0xC0, p1Parameter: 0x0, p2Parameter: 0x0, data: Data(), expectedResponseLength: Int(sw2))
+            let nextSegment: Data
+            // Overwrite sw1 and sw2.
+            (nextSegment, sw1, sw2) = try await tag.sendCommand(apdu: getResponseCmd)
+            Logger.tagReader.debug("Read remaining data. Accumulated: \(data.count + nextSegment.count)b. Last batch \(nextSegment.count)b. Still remaining: \(sw2)b")
+            data += nextSegment
+        }
+
         var rep = ResponseAPDU(data: [UInt8](data), sw1: sw1, sw2: sw2)
         
         if let sm = self.secureMessaging {
