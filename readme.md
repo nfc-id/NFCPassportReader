@@ -4,6 +4,8 @@ This package handles reading an NFC Enabled passport using iOS 13 CoreNFC APIS
 
 **Version 2 (and the main branch) now uses Swift Async/Await for communication.  If you need an earlier version, please use 1.1.9 or below!**
 
+**NOTE: 2.1.2 is the last version that will be deployed through Cocoapods as CocoaPods is considered deprecated and unsupported - please use Swift Package Manager**
+
 Supported features:
 * Basic Access Control (BAC)
 * Secure Messaging
@@ -25,7 +27,7 @@ It reads and verifies my passport (and others I've been able to test) fine, howe
 NFCPassportReader may be installed via Swift Package Manager, by pointing to this repo's URL.
 
 
-### CocoaPods (deprecated and unsupported)
+### CocoaPods **(deprecated and unsupported)**
 
 Install using [CocoaPods](http://cocoapods.org) by adding this line to your Podfile:
 
@@ -57,7 +59,7 @@ Passport number - 12345678
 Passport number checksum - 8
 Date Of birth - 980127
 Date of birth checksum - 7
-Expiry date - 250831
+Expiry date - 250830
 Expiry date checksum - 5
 
 mrzKey = "12345678898012772508315"
@@ -77,6 +79,7 @@ Currently the datagroups supported are: COM, DG1, DG2, DG7, DG11, DG12, DG14 (pa
 This will then handle the reading of the passport, and image and will call the completion block either with an TagError error if there was an error of some kind, or nil if successful.
 
 If successful, the passportReader object will then contain valid data for the passportMRZ and passportImage fields.
+Note - JPEG2000 images are currently unsupported - access to the raw data is available if you need to implement support for those.
 
 In addition, you can customise the messages displayed in the NFC Session Reader by providing a customDisplayMessage callback
 e.g. to override just the initial request to present passport message:
@@ -93,6 +96,9 @@ passportReader.readPassport(mrzKey: mrzKey, tags: [.COM, .DG1, .DG2],
         ...
 }
 ```
+
+Extended mode reads (not supported by all passports) can be enabled by passing in the useExtendedMode flag to the readPassport function.
+This will increase the number of bytes that can be read in a call and may be required for some passports that use long AA keys (some Australian passports for example).
 
 
 ## Logging
